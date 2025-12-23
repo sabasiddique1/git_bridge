@@ -35,14 +35,25 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get("error")
 
     if (error) {
+      console.error("[OAuth Callback] Error from GitHub:", error)
       return NextResponse.redirect(
         new URL(`/?error=${encodeURIComponent(error)}`, request.url)
       )
     }
 
     if (!code) {
+      console.error("[OAuth Callback] No code received")
       return NextResponse.redirect(
         new URL("/?error=no_code", request.url)
+      )
+    }
+
+    // Validate state for CSRF protection
+    const storedState = request.cookies.get("oauth_state")?.value
+    if (!state || !storedState || state !== storedState) {
+      console.error("[OAuth Callback] State mismatch - possible CSRF attack")
+      return NextResponse.redirect(
+        new URL("/?error=invalid_state", request.url)
       )
     }
 
@@ -141,36 +152,50 @@ export async function GET(request: NextRequest) {
     //   maxAge: 60 * 60 * 24 * 7, // 7 days
     // })
 
+    // Determine if we're in production (Vercel or local)
+    const isProduction = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production"
+    const isSecure = request.headers.get("x-forwarded-proto") === "https" || isProduction
+    
+    // Get domain from request for cookie domain setting
+    const host = request.headers.get("host") || ""
+    const domain = host.includes("localhost") ? undefined : host.split(":")[0]
+    
     // Redirect to dashboard after successful login
     const dashboardUrl = new URL("/dashboard", request.url)
     dashboardUrl.searchParams.set("github_login", "success")
     const response = NextResponse.redirect(dashboardUrl)
+    
+    // Clear OAuth state cookie (no longer needed)
+    response.cookies.delete("oauth_state")
     
     // Store user info in cookie temporarily (TODO: use proper session management)
     response.cookies.set("github_user", JSON.stringify({
       id: githubUser.id,
       login: githubUser.login,
       avatar_url: githubUser.avatar_url,
-      name: githubUser.name,
-      email: githubUser.email,
-      bio: githubUser.bio,
+      name: githubUser.name || null,
+      email: githubUser.email || null,
+      bio: githubUser.bio || null,
     }), {
       httpOnly: false, // TODO: Set to true with proper session
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       sameSite: "lax",
-      path: "/", // Important: set path to root so it's accessible everywhere
+      path: "/",
+      ...(domain && !domain.includes("localhost") ? { domain } : {}), // Set domain for production
       maxAge: 60 * 60 * 24 * 7, // 7 days
     })
 
     // Store access token temporarily (TODO: encrypt and store in database)
     response.cookies.set("github_access_token", tokenData.access_token, {
       httpOnly: true, // More secure - not accessible via JavaScript
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       sameSite: "lax",
-      path: "/", // Important: set path to root
+      path: "/",
+      ...(domain && !domain.includes("localhost") ? { domain } : {}), // Set domain for production
       maxAge: 60 * 60 * 24 * 7, // 7 days
     })
 
+    console.log("[OAuth Callback] Successfully authenticated user:", githubUser.login)
     return response
   } catch (error) {
     console.error("GitHub OAuth callback error:", error)

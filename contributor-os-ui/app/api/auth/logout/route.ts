@@ -11,8 +11,10 @@ import { NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   const response = NextResponse.json({ success: true })
   
-  // Clear session cookie
+  // Clear all auth cookies
   response.cookies.delete("github_user")
+  response.cookies.delete("github_access_token")
+  response.cookies.delete("oauth_state")
   // TODO: Clear proper session cookie when implemented
   
   return response

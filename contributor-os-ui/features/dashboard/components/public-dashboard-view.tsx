@@ -88,18 +88,19 @@ function PublicDashboardContent() {
     // Check if we just logged in (from OAuth callback)
     const githubLogin = searchParams.get("github_login")
     if (githubLogin === "success") {
-      // Remove query param
-      router.replace("/dashboard")
-      // Small delay to ensure cookies are set, then fetch user
-      setTimeout(() => {
-        fetchUser()
-      }, 200)
+      // Remove query param without navigation (preserves cookies)
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.delete("github_login")
+      window.history.replaceState({}, "", newUrl.toString())
+      
+      // Fetch user immediately (cookies should be set by redirect)
+      fetchUser()
     } else {
       // Fetch current user
       fetchUser()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, router])
+  }, [searchParams])
 
   const fetchRepositories = async () => {
     if (!user) return // Don't fetch if no user

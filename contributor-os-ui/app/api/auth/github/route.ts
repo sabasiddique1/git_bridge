@@ -48,12 +48,19 @@ export async function GET(request: NextRequest) {
   // Generate state for CSRF protection
   const state = crypto.randomUUID()
   
-  // Store state in session/cookie (TODO: implement proper session storage)
-  // For now, we'll pass it in the callback
-  
   const scope = "read:user user:email repo"
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`
   
-  return NextResponse.redirect(githubAuthUrl)
+  // Store state in httpOnly cookie for validation in callback
+  const response = NextResponse.redirect(githubAuthUrl)
+  response.cookies.set("oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 10, // 10 minutes
+  })
+  
+  return response
 }
 
