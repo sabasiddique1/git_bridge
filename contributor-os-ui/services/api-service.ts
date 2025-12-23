@@ -123,12 +123,34 @@ export const tasksApi = {
 
 /**
  * Repositories API
- * TODO: Implement backend endpoints
+ * Fetches user's open source repositories from GitHub
  */
 export const reposApi = {
   list: async () => {
-    // TODO: Replace with actual API call
-    return []
+    try {
+      console.log("[Repos API] Fetching repos from /api/auth/github/repos")
+      const response = await fetch("/api/auth/github/repos", {
+        credentials: "include", // Include cookies for authentication
+      })
+      console.log("[Repos API] Response status:", response.status, response.statusText)
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log("[Repos API] Not authenticated (401), returning empty array")
+          return []
+        }
+        const errorText = await response.text().catch(() => "Unknown error")
+        console.error("[Repos API] Error response:", errorText)
+        throw new Error(`Failed to fetch repos: ${response.status} ${errorText}`)
+      }
+      
+      const data = await response.json()
+      console.log("[Repos API] Received repos:", data.repos?.length || 0, "repos")
+      return data.repos || []
+    } catch (error: any) {
+      console.error("[Repos API] Fetch error:", error)
+      return [] // Return empty array on error
+    }
   },
   subscribe: async (repoId: number) => {
     // TODO: Replace with actual API call

@@ -334,6 +334,38 @@ export async function GET(request: NextRequest) {
                                      fullPR.mergeable_state === 'dirty' ||
                                      fullPR.mergeable_state === 'blocked'
 
+                // Determine review state with better logic
+                // Priority: draft > pending_review > null
+                let reviewState: "draft" | "pending_review" | null = null
+                
+                if (fullPR.draft) {
+                  reviewState = 'draft'
+                } else if (state === 'open') {
+                  // For open PRs, check if review is requested or pending
+                  // Check requested_reviewers (individual users)
+                  const hasRequestedReviewers = fullPR.requested_reviewers && fullPR.requested_reviewers.length > 0
+                  // Check requested_teams (teams)
+                  const hasRequestedTeams = fullPR.requested_teams && fullPR.requested_teams.length > 0
+                  // Check if PR is open and not merged (needs review)
+                  // If PR is open, not draft, and has reviewers requested, it's pending review
+                  if (hasRequestedReviewers || hasRequestedTeams) {
+                    reviewState = 'pending_review'
+                  } else {
+                    // Open PR without explicit reviewers might still need review
+                    // But we'll only mark as pending_review if reviewers are explicitly requested
+                    reviewState = null
+                  }
+                }
+                // Closed/merged PRs don't need review, so reviewState stays null
+
+                console.log(`[PRs API] PR #${fullPR.number} review state:`, {
+                  draft: fullPR.draft,
+                  state,
+                  requested_reviewers: fullPR.requested_reviewers?.length || 0,
+                  requested_teams: fullPR.requested_teams?.length || 0,
+                  reviewState,
+                })
+
                 return {
                   id: fullPR.id,
                   number: fullPR.number,
@@ -360,7 +392,7 @@ export async function GET(request: NextRequest) {
                   headRef: fullPR.head.ref,
                   hasConflicts: hasConflicts,
                   mergeableState: fullPR.mergeable_state || null,
-                  reviewState: fullPR.draft ? 'draft' : (fullPR.requested_reviewers?.length > 0 ? 'pending_review' : null),
+                  reviewState: reviewState,
                 } as PullRequest
               }
               return null
