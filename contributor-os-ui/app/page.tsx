@@ -1,11 +1,16 @@
 /**
- * HOME PAGE
+ * HOME PAGE / TIMELINE
  * 
- * Redirects to public dashboard
+ * Shows unified activity timeline
  */
 
-import { redirect } from "next/navigation"
+import { AppShell } from "@/components/app-shell"
+import { TimelineView } from "@/features/timeline/components/timeline-view"
 
 export default function Home() {
-  redirect("/dashboard")
+  return (
+    <AppShell>
+      <TimelineView />
+    </AppShell>
+  )
 }

@@ -38,17 +38,53 @@ export function TimelineItem({ event }: TimelineItemProps) {
   const config = typeConfig[event.type] || { icon: GitPullRequest, color: "text-muted-foreground", label: "Event" }
   const Icon = config.icon
 
-  // TODO: Determine if event needs action based on event type and metadata
-  const needsAction = false // Placeholder
+  // Determine if event needs action
+  const needsAction = 
+    event.type === "github.pr.opened" || 
+    event.type === "github.pr.review_requested" ||
+    event.type === "github.issue.opened"
 
-  // TODO: Format timestamp properly
-  const formattedTime = event.timestamp.toLocaleString()
+  // Format timestamp
+  const formatTime = (date: Date) => {
+    const now = new Date()
+    const diffTime = now.getTime() - date.getTime()
+    const diffMinutes = Math.floor(diffTime / (1000 * 60))
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
-  // TODO: Get repository name from event
-  const repoName = "github" in event ? event.repository.fullName : "Unknown"
+    if (diffMinutes < 1) return "Just now"
+    if (diffMinutes < 60) return `${diffMinutes}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
 
-  // TODO: Get title from event based on type
-  const title = "Event"
+  const formattedTime = formatTime(event.timestamp)
+
+  // Get repository name from event
+  const repoName = "repository" in event ? event.repository.fullName : "Unknown"
+
+  // Get title from event based on type
+  let title = "Event"
+  let eventUrl = "#"
+
+  if (event.type.startsWith("github.pr.")) {
+    const prEvent = event as PullRequestEvent
+    title = prEvent.pullRequest.title
+    eventUrl = prEvent.pullRequest.url
+  } else if (event.type.startsWith("github.issue.")) {
+    const issueEvent = event as IssueEvent
+    title = issueEvent.issue.title
+    eventUrl = issueEvent.issue.url
+  } else if (event.type === "github.comment.created" || event.type === "github.comment.updated") {
+    const commentEvent = event as CommentEvent
+    title = `Commented on ${commentEvent.comment.associatedWith.type === "pr" ? "PR" : "Issue"} #${commentEvent.comment.associatedWith.number}: ${commentEvent.comment.associatedWith.title}`
+    eventUrl = commentEvent.comment.url
+  } else if (event.type === "github.pr.reviewed") {
+    const reviewEvent = event as ReviewEvent
+    title = `Reviewed PR #${reviewEvent.review.pullRequestNumber}: ${reviewEvent.review.pullRequestTitle}`
+    eventUrl = reviewEvent.review.url
+  }
 
   return (
     <div
@@ -77,9 +113,16 @@ export function TimelineItem({ event }: TimelineItemProps) {
             {needsAction && (
               <Badge className="bg-primary/20 text-primary hover:bg-primary/30">Needs Action</Badge>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-              <ArrowUpRight className="h-4 w-4" />
-            </Button>
+            <a 
+              href={eventUrl} 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </a>
           </div>
         </div>
       </div>

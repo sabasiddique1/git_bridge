@@ -37,6 +37,10 @@ export interface Task {
   linkedPrNumber?: number
   linkedIssueNumber?: number
   linkedRepo?: string
+  // PR-specific metadata for tags
+  prState?: "open" | "closed" | "merged"
+  hasConflicts?: boolean
+  reviewState?: "draft" | "pending_review" | null
 }
 
 /**

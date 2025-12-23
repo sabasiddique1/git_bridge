@@ -1,14 +1,19 @@
 /**
  * DASHBOARD PAGE
  * 
- * Public dashboard that shows user info and open source repositories
- * Shows welcome screen when not logged in, user dashboard when logged in
+ * Dashboard that shows user info and open source repositories
+ * Uses AppShell for consistent navigation with other pages
  */
 
-import { PublicDashboardView } from "@/features/dashboard/components/public-dashboard-view"
+import { AppShell } from "@/components/app-shell"
+import { DashboardContent } from "@/features/dashboard/components/dashboard-content"
 
 export default function DashboardPage() {
-  return <PublicDashboardView />
+  return (
+    <AppShell>
+      <DashboardContent />
+    </AppShell>
+  )
 }
 
 

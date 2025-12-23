@@ -28,8 +28,22 @@ export function TimelineView() {
   const filter = useEventStore((state) => state.filter)
   const { data: events = [], isLoading } = useEvents(filter)
 
-  // TODO: Apply activeFilter to events
-  const filteredEvents = events
+  // Apply activeFilter to events
+  let filteredEvents = events
+
+  if (activeFilter === "PRs") {
+    filteredEvents = events.filter((e) => e.type.startsWith("github.pr."))
+  } else if (activeFilter === "Issues") {
+    filteredEvents = events.filter((e) => e.type.startsWith("github.issue."))
+  } else if (activeFilter === "Reviews") {
+    filteredEvents = events.filter((e) => e.type === "github.pr.reviewed" || e.type === "github.pr.review_requested")
+  } else if (activeFilter === "Needs Action") {
+    filteredEvents = events.filter((e) => 
+      e.type === "github.pr.opened" || 
+      e.type === "github.pr.review_requested" ||
+      e.type === "github.issue.opened"
+    )
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -49,8 +63,11 @@ export function TimelineView() {
                 {filter}
                 {filter === "Needs Action" && (
                   <Badge variant="destructive" className="ml-2 h-5 px-1.5">
-                    {/* TODO: Count actual needs action events */}
-                    0
+                    {events.filter((e) => 
+                      e.type === "github.pr.opened" || 
+                      e.type === "github.pr.review_requested" ||
+                      e.type === "github.issue.opened"
+                    ).length}
                   </Badge>
                 )}
               </Button>
