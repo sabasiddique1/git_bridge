@@ -18,8 +18,7 @@ export async function GET(request: NextRequest) {
   if (!redirectUri) {
     // In Vercel (production, preview, or development), use VERCEL_URL
     if (process.env.VERCEL_URL) {
-      const protocol = process.env.VERCEL_ENV === 'production' ? 'https' : 'https'
-      redirectUri = `${protocol}://${process.env.VERCEL_URL}/api/auth/github/callback`
+      redirectUri = `https://${process.env.VERCEL_URL}/api/auth/github/callback`
     }
     // Fallback to NEXT_PUBLIC_API_URL if set
     else if (process.env.NEXT_PUBLIC_API_URL) {
@@ -33,6 +32,11 @@ export async function GET(request: NextRequest) {
       redirectUri = `${protocol}://${host}/api/auth/github/callback`
     }
   }
+  
+  // Debug: Log redirect URI (remove in production)
+  console.log('[OAuth] Redirect URI:', redirectUri)
+  console.log('[OAuth] VERCEL_URL:', process.env.VERCEL_URL)
+  console.log('[OAuth] Host:', request.headers.get('host'))
   
   if (!clientId) {
     return NextResponse.json(
