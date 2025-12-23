@@ -33,6 +33,7 @@ export type EventType =
   | "github.issue.closed"
   | "github.comment.created"
   | "github.comment.updated"
+  | "github.commit.pushed"
   | "task.created"
   | "task.completed"
   | "task.updated"
@@ -66,7 +67,7 @@ export interface GitHubEvent extends BaseEvent {
 }
 
 export interface PullRequestEvent extends GitHubEvent {
-  type: "github.pr.opened" | "github.pr.closed" | "github.pr.merged" | "github.pr.review_requested" | "github.pr.reviewed"
+  type: "github.pr.opened" | "github.pr.closed" | "github.pr.merged" | "github.pr.review_requested"
   pullRequest: {
     number: number
     title: string
@@ -100,6 +101,19 @@ export interface CommentEvent extends GitHubEvent {
       type: "pr" | "issue"
       number: number
     }
+  }
+}
+
+export interface ReviewEvent extends GitHubEvent {
+  type: "github.pr.reviewed"
+  review: {
+    id: number
+    state: "approved" | "changes_requested" | "commented"
+    body?: string
+    url: string
+    pullRequestNumber: number
+    pullRequestTitle: string
+    pullRequestUrl: string
   }
 }
 
@@ -141,7 +155,7 @@ export interface NoteEvent extends BaseEvent {
 /**
  * Union type for all events
  */
-export type AppEvent = PullRequestEvent | IssueEvent | CommentEvent | TaskEvent | NoteEvent
+export type AppEvent = PullRequestEvent | IssueEvent | CommentEvent | ReviewEvent | TaskEvent | NoteEvent
 
 /**
  * Event filter criteria

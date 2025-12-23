@@ -26,7 +26,22 @@ const filters = ["All", "Needs Action", "PRs", "Issues", "Reviews"]
 export function TimelineView() {
   const [activeFilter, setActiveFilter] = useState("All")
   const filter = useEventStore((state) => state.filter)
-  const { data: events = [], isLoading } = useEvents(filter)
+  const { data: events = [], isLoading, error } = useEvents(filter)
+
+  // Debug logging
+  console.log("[TimelineView] State:", {
+    isLoading,
+    error: error?.message,
+    errorDetails: error,
+    eventsCount: events?.length || 0,
+    events: events?.slice(0, 3),
+    filter,
+    activeFilter,
+  })
+  
+  if (error) {
+    console.error("[TimelineView] Error details:", error)
+  }
 
   // Apply activeFilter to events
   let filteredEvents = events
@@ -38,70 +53,136 @@ export function TimelineView() {
   } else if (activeFilter === "Reviews") {
     filteredEvents = events.filter((e) => e.type === "github.pr.reviewed" || e.type === "github.pr.review_requested")
   } else if (activeFilter === "Needs Action") {
-    filteredEvents = events.filter((e) => 
-      e.type === "github.pr.opened" || 
-      e.type === "github.pr.review_requested" ||
-      e.type === "github.issue.opened"
-    )
+    // Only show OPEN PRs and OPEN issues (exclude merged/closed)
+    filteredEvents = events.filter((e) => {
+      if (e.type === "github.pr.opened" || e.type === "github.pr.review_requested") {
+        if ("pullRequest" in e) {
+          const prEvent = e as any
+          // Only include if PR is actually OPEN (not merged or closed)
+          return prEvent.pullRequest?.state === "open"
+        }
+        return true // Include if we can't verify state
+      }
+      if (e.type === "github.issue.opened") {
+        if ("issue" in e) {
+          const issueEvent = e as any
+          // Only include if issue is actually OPEN (not closed)
+          return issueEvent.issue?.state === "open"
+        }
+        return true // Include if we can't verify state
+      }
+      return false
+    })
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <div className="flex gap-1">
-            {filters.map((filter) => (
-              <Button
-                key={filter}
-                variant={activeFilter === filter ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setActiveFilter(filter)}
-                className={cn("text-sm", activeFilter === filter && "bg-secondary text-secondary-foreground")}
-              >
-                {filter}
-                {filter === "Needs Action" && (
-                  <Badge variant="destructive" className="ml-2 h-5 px-1.5">
-                    {events.filter((e) => 
-                      e.type === "github.pr.opened" || 
-                      e.type === "github.pr.review_requested" ||
-                      e.type === "github.issue.opened"
-                    ).length}
-                  </Badge>
-                )}
-              </Button>
-            ))}
-          </div>
+    <div className="mx-auto max-w-4xl space-y-6 px-4">
+      {/* Header */}
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Activity Timeline</h1>
+          <p className="text-muted-foreground mt-1">
+            Your GitHub contributions and open source activity
+          </p>
         </div>
-        <Button variant="ghost" size="sm" className="text-muted-foreground">
-          <Clock className="mr-2 h-4 w-4" />
-          Last 24 hours
-        </Button>
+        
+        {/* Filters */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex gap-1 flex-wrap">
+              {filters.map((filter) => (
+                <Button
+                  key={filter}
+                  variant={activeFilter === filter ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveFilter(filter)}
+                  className={cn(
+                    "text-sm transition-all",
+                    activeFilter === filter && "bg-secondary text-secondary-foreground shadow-sm"
+                  )}
+                >
+                  {filter}
+                  {filter === "Needs Action" && (
+                    <Badge variant="destructive" className="ml-2 h-5 px-1.5">
+                      {events.filter((e) => {
+                        if (e.type === "github.pr.opened" || e.type === "github.pr.review_requested") {
+                          if ("pullRequest" in e) {
+                            const prEvent = e as any
+                            return prEvent.pullRequest?.state === "open"
+                          }
+                          return true
+                        }
+                        if (e.type === "github.issue.opened") {
+                          if ("issue" in e) {
+                            const issueEvent = e as any
+                            return issueEvent.issue?.state === "open"
+                          }
+                          return true
+                        }
+                        return false
+                      }).length}
+                    </Badge>
+                  )}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {events.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Timeline Items */}
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading events...</div>
+        <div className="text-center py-12 text-muted-foreground">
+          <Activity className="h-12 w-12 mx-auto mb-2 opacity-50 animate-pulse" />
+          <p>Loading events...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 text-destructive">
+          <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+          <p className="font-semibold">Failed to load events</p>
+          <p className="text-sm text-muted-foreground mt-2">{error.message}</p>
+          <p className="text-xs text-muted-foreground mt-1">Make sure you're logged in with GitHub</p>
+        </div>
       ) : filteredEvents.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-          <p>No events found</p>
+          <p className="font-semibold">No events found</p>
+          <p className="text-sm mt-2">
+            {events.length === 0 
+              ? "You don't have any GitHub activity yet. Create a pull request or issue in an open source repository to see it here."
+              : `No events match the "${activeFilter}" filter. Try selecting a different filter.`}
+          </p>
+          {events.length > 0 && (
+            <p className="text-xs mt-1">Total events: {events.length}</p>
+          )}
         </div>
       ) : (
-        <div className="space-y-2">
-          {filteredEvents.map((event) => (
+        <div className="space-y-3">
+          {filteredEvents.map((event, index) => (
             <TimelineItem key={event.id} event={event} />
           ))}
         </div>
       )}
 
-      {/* Load More */}
-      <div className="flex justify-center pt-4">
-        <Button variant="outline" className="text-muted-foreground bg-transparent">
-          Load more activity
-        </Button>
-      </div>
+      {/* Load More - Only show if there are events */}
+      {filteredEvents.length > 0 && filteredEvents.length >= 50 && (
+        <div className="flex justify-center pt-6">
+          <Button 
+            variant="outline" 
+            className="text-muted-foreground"
+            disabled
+            title="All events are already loaded"
+          >
+            All activity loaded ({filteredEvents.length} events)
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

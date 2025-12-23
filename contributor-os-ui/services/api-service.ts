@@ -59,26 +59,57 @@ export const dashboardApi = {
  */
 export const eventsApi = {
   list: async (filter?: unknown) => {
-    const params = new URLSearchParams()
-    
-    if (filter && typeof filter === "object") {
-      const f = filter as any
-      if (f.types?.length) params.append("types", f.types.join(","))
-      if (f.sources?.length) params.append("sources", f.sources.join(","))
-      if (f.repositories?.length) params.append("repositories", f.repositories.join(","))
-      if (f.languages?.length) params.append("languages", f.languages.join(","))
-      if (f.needsAction) params.append("needsAction", "true")
-    }
+    try {
+      console.log("[Events API Service] Fetching events with filter:", filter)
+      const params = new URLSearchParams()
+      
+      if (filter && typeof filter === "object") {
+        const f = filter as any
+        if (f.types?.length) params.append("types", f.types.join(","))
+        if (f.sources?.length) params.append("sources", f.sources.join(","))
+        if (f.repositories?.length) params.append("repositories", f.repositories.join(","))
+        if (f.languages?.length) params.append("languages", f.languages.join(","))
+        if (f.needsAction) params.append("needsAction", "true")
+      }
 
-    const response = await fetch(`/api/events?${params.toString()}`, {
-      credentials: "include", // Include cookies for authentication
-    })
-    
-    if (!response.ok) {
-      throw new Error("Failed to fetch events")
+      const url = `/api/events?${params.toString()}`
+      console.log("[Events API Service] Fetching from:", url)
+
+      const response = await fetch(url, {
+        credentials: "include", // Include cookies for authentication
+      })
+      
+      console.log("[Events API Service] Response status:", response.status, response.statusText)
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "Unknown error")
+        console.error("[Events API Service] Error response:", errorText)
+        throw new Error(`Failed to fetch events: ${response.status} ${errorText}`)
+      }
+      
+      const data = await response.json()
+      console.log("[Events API Service] Received events:", Array.isArray(data) ? data.length : (data.events?.length || 0))
+      
+      // Handle both array and object responses
+      const events = Array.isArray(data) ? data : (data.events || [])
+      
+      // Convert timestamp strings back to Date objects
+      const eventsWithDates = events.map((event: any) => {
+        if (event.timestamp && typeof event.timestamp === 'string') {
+          return {
+            ...event,
+            timestamp: new Date(event.timestamp)
+          }
+        }
+        return event
+      })
+      
+      console.log("[Events API Service] Converted timestamps, returning", eventsWithDates.length, "events")
+      return eventsWithDates
+    } catch (error: any) {
+      console.error("[Events API Service] Fetch error:", error)
+      throw error
     }
-    
-    return response.json()
   },
   getById: async (id: string) => {
     // TODO: Replace with actual API call

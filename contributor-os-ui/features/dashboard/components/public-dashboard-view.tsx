@@ -33,6 +33,9 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { DashboardRecentActivity } from "./dashboard-recent-activity"
+import { DashboardNeedsAction } from "./dashboard-needs-action"
+import { useEvents } from "@/hooks/queries/use-events"
 
 interface User {
   id: number
@@ -67,6 +70,9 @@ function PublicDashboardContent() {
   const [repos, setRepos] = useState<Repository[]>([])
   const [loading, setLoading] = useState(true)
   const [reposLoading, setReposLoading] = useState(false)
+  
+  // Fetch events for dashboard
+  const { data: needsActionEvents = [], isLoading: needsActionLoading } = useEvents({ needsAction: true })
 
   const fetchUser = async () => {
     try {
@@ -266,6 +272,12 @@ function PublicDashboardContent() {
                 </div>
               </CardHeader>
             </Card>
+
+            {/* Activity Sections */}
+            <div className="grid gap-6 mb-8 md:grid-cols-2">
+              <DashboardNeedsAction events={needsActionEvents} isLoading={needsActionLoading} />
+              <DashboardRecentActivity />
+            </div>
 
             {/* Open Source Repositories Section */}
             <div className="mb-6 flex items-center justify-between">
