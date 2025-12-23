@@ -59,6 +59,16 @@ export async function GET(request: NextRequest) {
       // Ensure repository data exists
       const repoFullName = pr.repository?.fullName || pr.repository?.full_name || "unknown"
       
+      // Map PR state correctly
+      let prState: "open" | "closed" | "merged" = "open"
+      if (pr.state === "merged") {
+        prState = "merged"
+      } else if (pr.state === "closed") {
+        prState = "closed"
+      } else {
+        prState = "open"
+      }
+      
       return {
         id: `pr-${pr.id}`,
         title: pr.title || `PR #${pr.number}`,
@@ -70,8 +80,8 @@ export async function GET(request: NextRequest) {
         linkedPrNumber: pr.number,
         linkedIssueNumber: null,
         linkedRepo: repoFullName,
-        // Add PR metadata for tags
-        prState: pr.state, // "open" | "closed" | "merged"
+        // Add PR metadata for tags - ensure prState is always set
+        prState: prState, // "open" | "closed" | "merged"
         hasConflicts: pr.hasConflicts || false,
         reviewState: pr.reviewState || null, // "draft" | "pending_review" | null
       }
