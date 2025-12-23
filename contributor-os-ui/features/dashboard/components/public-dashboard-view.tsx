@@ -24,7 +24,12 @@ import {
   Code, 
   Calendar,
   Users,
-  FileCode
+  FileCode,
+  LayoutDashboard,
+  Activity,
+  CheckSquare,
+  FolderGit2,
+  FileText
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -148,50 +153,97 @@ function PublicDashboardContent() {
     Shell: "bg-gray-500",
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <FileCode className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-foreground">Contributor OS</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatar_url} alt={user.login} />
-                  <AvatarFallback>{user.login.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium">{user.login}</span>
-                <Link href="/logout">
-                  <Button variant="ghost" size="sm">Logout</Button>
-                </Link>
-              </div>
-            ) : (
-              <Link href="/login">
-                <Button size="sm" className="gap-2">
-                  <Github className="h-4 w-4" />
-                  Sign in with GitHub
-                </Button>
+  // If user is logged in, use AppShell for navigation
+  if (user) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Use AppShell for logged-in users */}
+        <div className="flex h-screen w-full overflow-hidden bg-background">
+          {/* Import AppShell components */}
+          <div className="flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar">
+            {/* Sidebar Navigation */}
+            <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                  <FileCode className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <span className="font-semibold text-sidebar-foreground">Contributor OS</span>
               </Link>
-            )}
+            </div>
+            <nav className="flex-1 space-y-1 overflow-auto px-3 py-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 rounded-md bg-sidebar-accent px-3 py-2 text-sm font-medium text-sidebar-accent-foreground"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                <span>Dashboard</span>
+              </Link>
+              <Link
+                href="/"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <Activity className="h-4 w-4" />
+                <span>Timeline</span>
+              </Link>
+              <Link
+                href="/tasks"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <CheckSquare className="h-4 w-4" />
+                <span>Tasks</span>
+              </Link>
+              <Link
+                href="/calendar"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <Calendar className="h-4 w-4" />
+                <span>Calendar</span>
+              </Link>
+              <Link
+                href="/repos"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <FolderGit2 className="h-4 w-4" />
+                <span>Repositories</span>
+              </Link>
+              <Link
+                href="/notes"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50"
+              >
+                <FileText className="h-4 w-4" />
+                <span>Notes</span>
+              </Link>
+            </nav>
           </div>
-        </div>
-      </header>
+          
+          {/* Main Content Area */}
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* Header */}
+            <header className="border-b border-border bg-card">
+              <div className="flex h-16 items-center justify-between px-6">
+                <h1 className="text-lg font-semibold">Dashboard</h1>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatar_url} alt={user.login} />
+                    <AvatarFallback>{user.login.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">{user.login}</span>
+                  <Link href="/logout">
+                    <Button variant="ghost" size="sm">Logout</Button>
+                  </Link>
+                </div>
+              </div>
+            </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-muted-foreground">Loading...</div>
-          </div>
-        ) : user ? (
-          <>
-            {/* User Info Section */}
+            {/* Dashboard Content */}
+            <main className="flex-1 overflow-auto p-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-muted-foreground">Loading...</div>
+                </div>
+              ) : (
+                <>
+                  {/* User Info Section */}
             <Card className="mb-8">
               <CardHeader>
                 <div className="flex items-start gap-4">
@@ -336,10 +388,42 @@ function PublicDashboardContent() {
                 ))}
               </div>
             )}
-          </>
-        ) : (
-          /* Not Logged In State */
-          <div className="flex flex-col items-center justify-center py-20">
+                </>
+              )}
+            </main>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Not logged in - show public view with simple header
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card">
+        <div className="container mx-auto flex h-16 items-center justify-between px-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <FileCode className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-foreground">Contributor OS</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/login">
+              <Button size="sm" className="gap-2">
+                <Github className="h-4 w-4" />
+                Sign in with GitHub
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-8">
+        {/* Not Logged In State */}
+        <div className="flex flex-col items-center justify-center py-20">
             <Card className="w-full max-w-2xl">
               <CardHeader className="text-center">
                 <CardTitle className="text-3xl">Welcome to Contributor OS</CardTitle>
@@ -380,7 +464,6 @@ function PublicDashboardContent() {
               </CardContent>
             </Card>
           </div>
-        )}
       </main>
     </div>
   )
