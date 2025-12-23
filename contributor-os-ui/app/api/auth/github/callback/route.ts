@@ -48,7 +48,17 @@ export async function GET(request: NextRequest) {
 
     const clientId = process.env.GITHUB_CLIENT_ID
     const clientSecret = process.env.GITHUB_CLIENT_SECRET
-    const redirectUri = process.env.GITHUB_REDIRECT_URI || `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/github/callback`
+    
+    // Determine redirect URI based on environment
+    let redirectUri = process.env.GITHUB_REDIRECT_URI
+    if (!redirectUri) {
+      // In production (Vercel), use NEXT_PUBLIC_API_URL or construct from request
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+        (request.headers.get('host') ? `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}` : null) ||
+        'http://localhost:3000'
+      redirectUri = `${baseUrl}/api/auth/github/callback`
+    }
 
     if (!clientId || !clientSecret) {
       return NextResponse.redirect(
