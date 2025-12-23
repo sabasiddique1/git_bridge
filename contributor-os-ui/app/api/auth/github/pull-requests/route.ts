@@ -78,9 +78,8 @@ interface PullRequest {
 }
 
 /**
- * Check if a repository should be included (public repos where user contributed)
- * Simplified logic: Include all public repos (open source by definition)
- * Exclude only private repos and user's own personal repos without community interest
+ * Check if a repository is open source - STRICT: Must have a license
+ * Only include repos that have an open source license
  */
 function isOpenSourceRepository(repo: any, userLogin: string): boolean {
   // Exclude private repos
@@ -89,65 +88,21 @@ function isOpenSourceRepository(repo: any, userLogin: string): boolean {
     return false
   }
 
-  // Include all organization repos (they're public and likely open source)
-  if (repo.owner?.type === "Organization") {
-    console.log(`[PRs API] Including ${repo.full_name}: organization repo`)
-    return true
-  }
-
-  // Include repos owned by others (public repos you contributed to)
-  if (repo.owner?.login !== userLogin) {
-    console.log(`[PRs API] Including ${repo.full_name}: public repo owned by ${repo.owner?.login}`)
-    return true
-  }
-
-  // For user's own repos, include if:
-  // - Has a license (open source intent)
-  // - Has open-source topics
-  // - Has community interest (stars/forks)
-  // - Is not a fork (original project)
-  
-  const openSourceTopics = [
-    "open-source",
-    "opensource",
-    "hacktoberfest",
-    "oss",
-    "open-source-project",
-  ]
-  const repoTopics = repo.topics || []
-  const hasOpenSourceTopic = repoTopics.some((topic: string) =>
-    openSourceTopics.includes(topic.toLowerCase())
-  )
-
-  if (hasOpenSourceTopic) {
-    console.log(`[PRs API] Including ${repo.full_name}: has open-source topics`)
-    return true
-  }
-
-  if (repo.license && repo.license.key) {
-    console.log(`[PRs API] Including ${repo.full_name}: has license`)
-    return true
-  }
-
-  if (!repo.fork && (repo.stargazers_count > 0 || repo.forks_count > 0)) {
-    console.log(`[PRs API] Including ${repo.full_name}: has community interest`)
-    return true
-  }
-
-  // Exclude user's own repos that are forks without license/topics
-  if (repo.fork && !repo.license) {
-    console.log(`[PRs API] Excluding ${repo.full_name}: user's fork without license`)
+  // STRICT: Must have a license to be considered open source
+  if (!repo.license || !repo.license.key) {
+    console.log(`[PRs API] Excluding ${repo.full_name}: no license (not open source)`)
     return false
   }
 
-  // Include user's own non-fork repos (likely their open source projects)
-  if (!repo.fork) {
-    console.log(`[PRs API] Including ${repo.full_name}: user's own non-fork repo`)
-    return true
+  // Exclude "NOASSERTION" and "NONE" licenses (not real open source licenses)
+  if (repo.license.key === "NOASSERTION" || repo.license.key === "NONE") {
+    console.log(`[PRs API] Excluding ${repo.full_name}: invalid license (${repo.license.key})`)
+    return false
   }
 
-  console.log(`[PRs API] Excluding ${repo.full_name}: user's personal repo without open source indicators`)
-  return false
+  // If it has a valid license, it's open source
+  console.log(`[PRs API] Including ${repo.full_name}: has open source license (${repo.license.key})`)
+  return true
 }
 
 export async function GET(request: NextRequest) {
@@ -279,8 +234,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`[PRs API] Processing ${prs.length} PRs to filter for open source repos`)
 
-    let processedCount = 0
-    let skippedCount = 0
+    // Step 1: Extract repo names and deduplicate
+    const repoMap = new Map<string, { prs: typeof prs }>()
     
     for (const pr of prs) {
       // Extract repository full_name from multiple possible locations
@@ -291,9 +246,6 @@ export async function GET(request: NextRequest) {
         const match = pr.html_url.match(/github\.com\/([^\/]+\/[^\/]+)\/pull/)
         if (match) {
           repoFullName = match[1]
-          if (processedCount < 5) {
-            console.log(`[PRs API] ✓ Extracted repo "${repoFullName}" from URL for PR #${pr.number}`)
-          }
         }
       }
       
@@ -302,124 +254,131 @@ export async function GET(request: NextRequest) {
         const match = pr.repository_url.match(/\/repos\/([^\/]+\/[^\/]+)$/)
         if (match) {
           repoFullName = match[1]
-          if (processedCount < 5) {
-            console.log(`[PRs API] ✓ Extracted repo "${repoFullName}" from repository_url for PR #${pr.number}`)
+        }
+      }
+      
+      if (repoFullName) {
+        if (!repoMap.has(repoFullName)) {
+          repoMap.set(repoFullName, { prs: [] })
+        }
+        repoMap.get(repoFullName)!.prs.push(pr)
+      }
+    }
+
+    console.log(`[PRs API] Found ${repoMap.size} unique repositories`)
+
+    // Step 2: Fetch repository details in parallel (batch of 10 at a time)
+    const repoDetails = new Map<string, any>()
+    const repoEntries = Array.from(repoMap.entries())
+    const BATCH_SIZE = 10
+
+    for (let i = 0; i < repoEntries.length; i += BATCH_SIZE) {
+      const batch = repoEntries.slice(i, i + BATCH_SIZE)
+      console.log(`[PRs API] Fetching repo details batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(repoEntries.length / BATCH_SIZE)}`)
+      
+      const repoPromises = batch.map(async ([repoFullName, { prs }]) => {
+        try {
+          const repoResponse = await fetch(`https://api.github.com/repos/${repoFullName}`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+          })
+
+          if (repoResponse.ok) {
+            const repo = await repoResponse.json()
+            const isOpenSource = isOpenSourceRepository(repo, userLogin)
+            if (isOpenSource) {
+              repoDetails.set(repoFullName, repo)
+              return { repoFullName, repo, prs }
+            }
           }
+          return null
+        } catch (error) {
+          console.error(`[PRs API] Error fetching repo ${repoFullName}:`, error)
+          return null
         }
-      }
-      
-      if (!repoFullName) {
-        skippedCount++
-        if (skippedCount <= 3) {
-          console.warn(`[PRs API] ✗ PR #${pr.number} missing repository info, html_url: ${pr.html_url}`)
-        }
-        continue
-      }
-      
-      processedCount++
-      
-      // Get repository details to check if it's open source
-      const repoApiUrl = `https://api.github.com/repos/${repoFullName}`
-      
-      if (processedCount <= 3) {
-        console.log(`[PRs API] Fetching repo details for: ${repoFullName} (PR #${pr.number})`)
-      }
-      
-      const repoResponse = await fetch(repoApiUrl, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
       })
 
-      if (repoResponse.ok) {
-        const repo = await repoResponse.json()
-        
-        if (processedCount <= 3) {
-          console.log(`[PRs API] Repo details for ${repoFullName}:`, {
-            name: repo.name,
-            full_name: repo.full_name,
-            private: repo.private,
-            owner_type: repo.owner?.type,
-            owner_login: repo.owner?.login,
-            has_license: !!repo.license,
-            language: repo.language,
-          })
-        }
-        
-        // Check if repository is open source using similar logic to repos API
-        const isOpenSource = isOpenSourceRepository(repo, userLogin)
-        
-        if (isOpenSource) {
-          if (openSourcePRs.length < 5) {
-            console.log(`[PRs API] ✓ Including PR #${pr.number} from ${repoFullName} (open source repo)`)
-          }
-          try {
-            // Get full PR details - construct PR API URL from repository and PR number
-            const prApiUrl = `https://api.github.com/repos/${repoFullName}/pulls/${pr.number}`
-            const fullPRResponse = await fetch(prApiUrl, {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/vnd.github.v3+json",
-              },
-            })
+      const results = await Promise.all(repoPromises)
+      const openSourceRepos = results.filter(Boolean) as Array<{ repoFullName: string; repo: any; prs: typeof prs }>
 
-            if (fullPRResponse.ok) {
-              const fullPR = await fullPRResponse.json()
-              
-              // Determine PR state (merged, closed, or open)
-              let state: "open" | "closed" | "merged" = "open"
-              if (fullPR.merged_at) {
-                state = "merged"
-              } else if (fullPR.state === "closed") {
-                state = "closed"
-              }
-              
-              // Check for merge conflicts
-              const hasConflicts = fullPR.mergeable === false || 
-                                   fullPR.mergeable_state === 'dirty' ||
-                                   fullPR.mergeable_state === 'blocked'
-
-              openSourcePRs.push({
-                id: fullPR.id,
-                number: fullPR.number,
-                title: fullPR.title,
-                body: fullPR.body,
-                state,
-                url: fullPR.html_url,
-                createdAt: fullPR.created_at,
-                updatedAt: fullPR.updated_at,
-                author: {
-                  login: fullPR.user.login,
-                  avatarUrl: fullPR.user.avatar_url,
+      // Step 3: Fetch PR details in parallel for open source repos (batch of 5 PRs at a time)
+      for (const { repoFullName, repo, prs: repoPRs } of openSourceRepos) {
+        for (let j = 0; j < repoPRs.length; j += 5) {
+          const prBatch = repoPRs.slice(j, j + 5)
+          
+          const prPromises = prBatch.map(async (pr) => {
+            try {
+              const prApiUrl = `https://api.github.com/repos/${repoFullName}/pulls/${pr.number}`
+              const fullPRResponse = await fetch(prApiUrl, {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/vnd.github.v3+json",
                 },
-                repository: {
-                  id: repo.id,
-                  name: repo.name,
-                  fullName: repo.full_name,
-                  owner: repo.owner.login,
-                  ownerType: repo.owner.type,
-                  language: repo.language,
-                  license: repo.license?.name || repo.license?.key || null,
-                },
-                baseRef: fullPR.base.ref,
-                headRef: fullPR.head.ref,
-                hasConflicts: hasConflicts,
-                mergeableState: fullPR.mergeable_state || null,
-                reviewState: fullPR.draft ? 'draft' : (fullPR.requested_reviewers?.length > 0 ? 'pending_review' : null),
               })
-            } else {
-              console.warn(`[PRs API] Failed to fetch PR details for ${repoFullName}#${pr.number}:`, fullPRResponse.status)
+
+              if (fullPRResponse.ok) {
+                const fullPR = await fullPRResponse.json()
+                
+                // Determine PR state (merged, closed, or open)
+                let state: "open" | "closed" | "merged" = "open"
+                if (fullPR.merged_at) {
+                  state = "merged"
+                } else if (fullPR.state === "closed") {
+                  state = "closed"
+                }
+                
+                // Check for merge conflicts
+                const hasConflicts = fullPR.mergeable === false || 
+                                     fullPR.mergeable_state === 'dirty' ||
+                                     fullPR.mergeable_state === 'blocked'
+
+                return {
+                  id: fullPR.id,
+                  number: fullPR.number,
+                  title: fullPR.title,
+                  body: fullPR.body,
+                  state,
+                  url: fullPR.html_url,
+                  createdAt: fullPR.created_at,
+                  updatedAt: fullPR.updated_at,
+                  author: {
+                    login: fullPR.user.login,
+                    avatarUrl: fullPR.user.avatar_url,
+                  },
+                  repository: {
+                    id: repo.id,
+                    name: repo.name,
+                    fullName: repo.full_name,
+                    owner: repo.owner.login,
+                    ownerType: repo.owner.type,
+                    language: repo.language,
+                    license: repo.license?.name || repo.license?.key || null,
+                  },
+                  baseRef: fullPR.base.ref,
+                  headRef: fullPR.head.ref,
+                  hasConflicts: hasConflicts,
+                  mergeableState: fullPR.mergeable_state || null,
+                  reviewState: fullPR.draft ? 'draft' : (fullPR.requested_reviewers?.length > 0 ? 'pending_review' : null),
+                } as PullRequest
+              }
+              return null
+            } catch (error) {
+              console.error(`[PRs API] Error fetching PR ${repoFullName}#${pr.number}:`, error)
+              return null
             }
-          } catch (error) {
-            console.error(`[PRs API] Error fetching PR details for ${repoFullName}#${pr.number}:`, error)
-          }
-        } else {
-          console.log(`[PRs API] Excluding PR #${pr.number} from ${repoFullName} (not open source)`)
+          })
+
+          const prResults = await Promise.all(prPromises)
+          const validPRs = prResults.filter(Boolean) as PullRequest[]
+          openSourcePRs.push(...validPRs)
         }
-      } else {
-        const errorText = await repoResponse.text().catch(() => '')
-        console.warn(`[PRs API] Failed to fetch repository ${repoFullName}:`, repoResponse.status, errorText.substring(0, 100))
+      }
+
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < repoEntries.length) {
+        await new Promise(resolve => setTimeout(resolve, 200))
       }
     }
 
@@ -430,8 +389,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`[PRs API] Summary:`)
     console.log(`  - Total PRs found: ${prs.length}`)
-    console.log(`  - Processed: ${processedCount}`)
-    console.log(`  - Skipped (no repo name): ${skippedCount}`)
+    console.log(`  - Unique repositories: ${repoMap.size}`)
+    console.log(`  - Open source repositories: ${repoDetails.size}`)
     console.log(`  - Open source PRs included: ${openSourcePRs.length}`)
     console.log(`[PRs API] Returning ${openSourcePRs.length} open source PRs out of ${prs.length} total PRs`)
     

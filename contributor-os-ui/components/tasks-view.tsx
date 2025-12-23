@@ -11,9 +11,9 @@ import { useTasks } from "@/hooks/queries/use-tasks"
 import type { Task } from "@/types"
 
 const statusColors = {
-  pending: "bg-chart-1/20 text-chart-1",
-  waiting: "bg-chart-3/20 text-chart-3",
-  done: "bg-muted text-muted-foreground",
+  pending: "bg-green-500/20 text-green-600 dark:text-green-400", // Green for pending/open
+  waiting: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400", // Yellow for waiting
+  done: "bg-purple-500/20 text-purple-600 dark:text-purple-400", // Purple for done/merged
 }
 
 const statusLabels = {
@@ -22,11 +22,11 @@ const statusLabels = {
   done: "Done",
 }
 
-// PR state tags
+// PR state tags - GitHub color scheme
 const prStateColors = {
-  merged: "bg-primary/20 text-primary",
-  closed: "bg-muted/20 text-muted-foreground",
-  open: "bg-chart-1/20 text-chart-1",
+  merged: "bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/30", // Purple like GitHub
+  closed: "bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30", // Red like GitHub
+  open: "bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30", // Green like GitHub
 }
 
 const prStateLabels = {
@@ -216,23 +216,23 @@ function TaskItem({ task, onToggle }: {
           {formatDate(task.updatedAt)}
         </span>
         
-        {/* PR State Tag (Merged/Closed/Open) */}
+        {/* PR State Tag (Merged/Closed/Open) - GitHub colors */}
         {task.prState && (
-          <Badge className={cn("text-xs", prStateColors[task.prState])}>
+          <Badge className={cn("text-xs border", prStateColors[task.prState])}>
             {prStateLabels[task.prState]}
           </Badge>
         )}
         
-        {/* Conflicts Tag */}
+        {/* Conflicts Tag - Yellow like GitHub */}
         {task.hasConflicts && (
-          <Badge className="text-xs bg-destructive/20 text-destructive border-destructive/50">
+          <Badge className="text-xs bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/30">
             Conflicts
           </Badge>
         )}
         
         {/* Review State Tag */}
         {task.reviewState === "pending_review" && (
-          <Badge className="text-xs bg-chart-5/20 text-chart-5">
+          <Badge className="text-xs bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30">
             Pending Review
           </Badge>
         )}
@@ -242,10 +242,10 @@ function TaskItem({ task, onToggle }: {
           </Badge>
         )}
         
-        {/* Task Status Badge */}
-        <Badge className={cn("text-xs", statusColors[task.status])}>
+        {/* Task Status Badge - Commented out for now */}
+        {/* <Badge className={cn("text-xs", statusColors[task.status])}>
           {statusLabels[task.status]}
-        </Badge>
+        </Badge> */}
         {task.linkedUrl && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
