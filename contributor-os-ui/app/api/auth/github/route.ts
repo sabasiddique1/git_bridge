@@ -14,13 +14,24 @@ export async function GET(request: NextRequest) {
   
   // Determine redirect URI based on environment
   let redirectUri = process.env.GITHUB_REDIRECT_URI
+  
   if (!redirectUri) {
-    // In production (Vercel), use NEXT_PUBLIC_API_URL or construct from request
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-      (request.headers.get('host') ? `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}` : null) ||
-      'http://localhost:3000'
-    redirectUri = `${baseUrl}/api/auth/github/callback`
+    // In Vercel (production, preview, or development), use VERCEL_URL
+    if (process.env.VERCEL_URL) {
+      const protocol = process.env.VERCEL_ENV === 'production' ? 'https' : 'https'
+      redirectUri = `${protocol}://${process.env.VERCEL_URL}/api/auth/github/callback`
+    }
+    // Fallback to NEXT_PUBLIC_API_URL if set
+    else if (process.env.NEXT_PUBLIC_API_URL) {
+      redirectUri = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/github/callback`
+    }
+    // Use request headers to detect URL (for Vercel edge/other platforms)
+    else {
+      const host = request.headers.get('host')
+      const protocol = request.headers.get('x-forwarded-proto') || 
+                      (host?.includes('localhost') ? 'http' : 'https')
+      redirectUri = `${protocol}://${host}/api/auth/github/callback`
+    }
   }
   
   if (!clientId) {
