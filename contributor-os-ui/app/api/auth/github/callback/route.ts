@@ -1,0 +1,157 @@
+/**
+ * GITHUB OAUTH CALLBACK
+ * 
+ * GET /api/auth/github/callback - Handle GitHub OAuth callback
+ * 
+ * Exchanges authorization code for access token
+ * Fetches user information from GitHub
+ * Creates/updates user in database
+ * Sets session/cookie
+ */
+
+import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
+
+interface GitHubTokenResponse {
+  access_token: string
+  token_type: string
+  scope: string
+}
+
+interface GitHubUser {
+  id: number
+  login: string
+  name: string
+  email: string
+  avatar_url: string
+  bio: string
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams
+    const code = searchParams.get("code")
+    const state = searchParams.get("state")
+    const error = searchParams.get("error")
+
+    if (error) {
+      return NextResponse.redirect(
+        new URL(`/?error=${encodeURIComponent(error)}`, request.url)
+      )
+    }
+
+    if (!code) {
+      return NextResponse.redirect(
+        new URL("/?error=no_code", request.url)
+      )
+    }
+
+    const clientId = process.env.GITHUB_CLIENT_ID
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET
+    const redirectUri = process.env.GITHUB_REDIRECT_URI || `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/github/callback`
+
+    if (!clientId || !clientSecret) {
+      return NextResponse.redirect(
+        new URL("/?error=oauth_not_configured", request.url)
+      )
+    }
+
+    // Exchange code for access token
+    const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+        state,
+      }),
+    })
+
+    if (!tokenResponse.ok) {
+      throw new Error("Failed to exchange code for token")
+    }
+
+    const tokenData = (await tokenResponse.json()) as GitHubTokenResponse
+
+    if (tokenData.error) {
+      return NextResponse.redirect(
+        new URL(`/?error=${encodeURIComponent(tokenData.error)}`, request.url)
+      )
+    }
+
+    // Fetch user information from GitHub
+    const userResponse = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    })
+
+    if (!userResponse.ok) {
+      throw new Error("Failed to fetch user information")
+    }
+
+    const githubUser = (await userResponse.json()) as GitHubUser
+
+    // TODO: Store user in database
+    // const user = await userService.createOrUpdate({
+    //   githubId: githubUser.id,
+    //   githubLogin: githubUser.login,
+    //   githubAvatarUrl: githubUser.avatar_url,
+    //   githubAccessToken: encrypt(tokenData.access_token), // Encrypt before storing
+    // })
+
+    // TODO: Create session/cookie
+    // const session = await createSession(user.id)
+    // const response = NextResponse.redirect(new URL("/", request.url))
+    // response.cookies.set("session", session.token, {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production",
+    //   sameSite: "lax",
+    //   maxAge: 60 * 60 * 24 * 7, // 7 days
+    // })
+
+    // Redirect to dashboard after successful login
+    const dashboardUrl = new URL("/dashboard", request.url)
+    dashboardUrl.searchParams.set("github_login", "success")
+    const response = NextResponse.redirect(dashboardUrl)
+    
+    // Store user info in cookie temporarily (TODO: use proper session management)
+    response.cookies.set("github_user", JSON.stringify({
+      id: githubUser.id,
+      login: githubUser.login,
+      avatar_url: githubUser.avatar_url,
+      name: githubUser.name,
+      email: githubUser.email,
+      bio: githubUser.bio,
+    }), {
+      httpOnly: false, // TODO: Set to true with proper session
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/", // Important: set path to root so it's accessible everywhere
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    // Store access token temporarily (TODO: encrypt and store in database)
+    response.cookies.set("github_access_token", tokenData.access_token, {
+      httpOnly: true, // More secure - not accessible via JavaScript
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/", // Important: set path to root
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    return response
+  } catch (error) {
+    console.error("GitHub OAuth callback error:", error)
+    return NextResponse.redirect(
+      new URL("/?error=oauth_failed", request.url)
+    )
+  }
+}
+
