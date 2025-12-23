@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
   // Debug: Log redirect URI (remove in production)
   console.log('[OAuth] Redirect URI:', redirectUri)
   console.log('[OAuth] VERCEL_URL:', process.env.VERCEL_URL)
+  console.log('[OAuth] VERCEL_ENV:', process.env.VERCEL_ENV)
   console.log('[OAuth] Host:', request.headers.get('host'))
+  console.log('[OAuth] Full URL:', request.url)
   
   if (!clientId) {
     return NextResponse.json(
